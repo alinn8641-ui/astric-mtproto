@@ -1,9 +1,10 @@
 """
 Astric Sender · MTProto backend (FastAPI + Telethon), deploy on Render.
-api_id / api_hash / MT_SECRET уже вписаны — НЕ редактируйте.
+api_id / api_hash / MT_SECRET уже вписаны по умолчанию — ничего не редактируй.
 """
 import asyncio, os, sqlite3, uuid
 from fastapi import FastAPI, Header, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -20,6 +21,15 @@ MT_SECRET  = os.getenv("MT_SECRET", "change-me-strong-secret")
 DB_FILE = os.getenv("SESSIONS_DB", "sessions.db")
 
 app = FastAPI(title="Astric Sender MTProto")
+
+# CORS — разрешаем запросы с любых доменов (Mini App в Telegram WebView и т.д.)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def require_secret(x_mt_secret: str = Header(default="")):
     if x_mt_secret != MT_SECRET:
