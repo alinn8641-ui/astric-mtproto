@@ -1,4 +1,4 @@
-Astric Sender · MTProto backend (FastAPI + Telethon), deploy on Render.
+# Astric Sender · MTProto backend (FastAPI + Telethon), deploy on Render.
 api_id / api_hash / MT_SECRET уже вписаны по умолчанию — ничего не редактируй.
 """
 import asyncio, os, sqlite3, uuid
