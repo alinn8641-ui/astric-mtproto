@@ -13,7 +13,7 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import (
     SessionPasswordNeededError, PhoneCodeInvalidError,
-    PhoneCodeExpiredError, FloodWaitError,
+    PhoneCodeExpiredError, FloodWaitError, AuthKeyUnregisteredError,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -82,6 +82,8 @@ class VerifyBody(BaseModel):
     code: str
     password: Optional[str] = ""
     phone_code_hash: Optional[str] = None
+class StatusBody(BaseModel):
+    session_string: str
 class BroadcastBody(BaseModel):
     session_string: str
     targets: List[str]
@@ -152,6 +154,22 @@ async def verify(body: VerifyBody, x_mt_secret: str = Header(default="")):
         return {"success": True, "session_ref": ss, "phone": phone, "message": "Аккаунт привязан"}
     except Exception as e:
         logger.error("verify FAIL %s: %s", phone, e)
+        return {"success": False, "error": str(e)}
+    finally:
+        await client.disconnect()
+
+
+@app.post("/api/auth/status")
+async def session_status(body: StatusBody, x_mt_secret: str = Header(default="")):
+    require_secret(x_mt_secret)
+    client = get_client(body.session_string)
+    try:
+        await client.connect()
+        me = await client.get_me()
+        return {"success": True, "active": me is not None}
+    except AuthKeyUnregisteredError:
+        return {"success": True, "active": False, "reason": "session_revoked"}
+    except Exception as e:
         return {"success": False, "error": str(e)}
     finally:
         await client.disconnect()
