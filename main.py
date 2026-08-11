@@ -62,6 +62,13 @@ def save_session(phone: str, ss: str):
     c = db(); c.execute("INSERT OR REPLACE INTO sessions (phone, session_string) VALUES (?,?)", (phone, ss)); c.commit(); c.close()
 
 
+def load_session(phone: str) -> Optional[str]:
+    c = db()
+    row = c.execute("SELECT session_string FROM sessions WHERE phone=?", (phone,)).fetchone()
+    c.close()
+    return row[0] if row else None
+
+
 def get_client(session_string: Optional[str] = None) -> TelegramClient:
     if session_string:
         return TelegramClient(StringSession(session_string), API_ID, API_HASH)
@@ -99,6 +106,10 @@ async def send_code(body: SendCodeBody, x_mt_secret: str = Header(default="")):
         await client.connect()
         r = await client.send_code_request(phone)
         logger.info("send-code OK for %s", phone)
+        try:
+            save_session(phone, StringSession.save(client.session))
+        except Exception as e:
+            logger.warning("save intermediate session failed: %s", e)
         return {"success": True, "message": "Code sent", "phone_code_hash": getattr(r, "phone_code_hash", "") or ""}
     except FloodWaitError as e:
         logger.warning("FLOOD_WAIT %s: %s", phone, e.seconds)
@@ -115,7 +126,7 @@ async def verify(body: VerifyBody, x_mt_secret: str = Header(default="")):
     require_secret(x_mt_secret)
     phone = body.phone.strip()
     logger.info("verify for %s", phone)
-    client = get_client()
+    client = get_client(load_session(phone))
     try:
         await client.connect()
         try:
