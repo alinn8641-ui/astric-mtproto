@@ -74,6 +74,7 @@ class VerifyBody(BaseModel):
     phone: str
     code: str
     password: Optional[str] = ""
+    phone_code_hash: Optional[str] = None
 class BroadcastBody(BaseModel):
     session_string: str
     targets: List[str]
@@ -118,7 +119,7 @@ async def verify(body: VerifyBody, x_mt_secret: str = Header(default="")):
     try:
         await client.connect()
         try:
-            await client.sign_in(phone, body.code)
+            await client.sign_in(phone, body.code, phone_code_hash=body.phone_code_hash)
         except SessionPasswordNeededError:
             if not body.password:
                 return {"success": False, "error": "needs_password"}
