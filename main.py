@@ -2,7 +2,7 @@
 Astric Sender · MTProto backend (FastAPI + Telethon), deploy on Render.
 api_id / api_hash / MT_SECRET уже вписаны. CORS + логирование включены.
 """
-import asyncio, os, sqlite3, uuid, logging
+import asyncio, os, sqlite3, uuid, logging, io, base64
 from fastapi import FastAPI, Header, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -84,6 +84,9 @@ class VerifyBody(BaseModel):
     phone_code_hash: Optional[str] = None
 class StatusBody(BaseModel):
     session_string: str
+class ChatsBody(BaseModel):
+    session_string: str
+    limit: int = 60
 class BroadcastBody(BaseModel):
     session_string: str
     targets: List[str]
@@ -169,6 +172,36 @@ async def session_status(body: StatusBody, x_mt_secret: str = Header(default="")
         return {"success": True, "active": me is not None}
     except AuthKeyUnregisteredError:
         return {"success": True, "active": False, "reason": "session_revoked"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    finally:
+        await client.disconnect()
+
+
+@app.post("/api/chats")
+async def list_chats(body: ChatsBody, x_mt_secret: str = Header(default="")):
+    require_secret(x_mt_secret)
+    client = get_client(body.session_string)
+    dialogs = []
+    try:
+        await client.connect()
+        async for d in client.iter_dialogs(limit=body.limit):
+            entity = d.entity
+            ttype = "dm" if d.is_user else ("channel" if getattr(entity, "broadcast", False) else "group")
+            photo = None
+            try:
+                buf = io.BytesIO()
+                got = await client.download_profile_photo(entity, file=buf, download_big=False)
+                if got:
+                    photo = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            except Exception:
+                pass
+            dialogs.append({"id": d.id, "title": d.name or "",
+                            "username": getattr(entity, "username", None) or None,
+                            "type": ttype, "photo": photo})
+        return {"success": True, "chats": dialogs}
+    except AuthKeyUnregisteredError:
+        return {"success": False, "error": "session_revoked"}
     except Exception as e:
         return {"success": False, "error": str(e)}
     finally:
